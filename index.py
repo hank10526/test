@@ -11,10 +11,19 @@ def index():
     homepage += "<a href=/account>網頁表單傳值</a><br>"
     homepage += "<a href=/about>憲墉簡介網頁</a><br>"
     homepage += "<a href=/add>次方與根號計算</a><br>"
+    homepage += "<br><a href=/read>讀取Firestore資料</a><br>"
 
     return homepage
+@app.route("/read")
+def read():
+    Result = ""
+    db = firestore.client()
+    collection_ref = db.collection("資管class")    
+    docs = collection_ref.get()    
+    for doc in docs:         
+        Result += "文件內容：{}".format(doc.to_dict()) + "<br>"    
+    return Result
 	
-
 @app.route("/hank")
 def course():
     return "<h1>資訊管理導論</h1>"
