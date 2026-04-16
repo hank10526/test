@@ -3,7 +3,10 @@ from datetime import datetime
 import os
 import json
 import firebase_admin
-from firebase_admin import credentials, firestore
+from  firebase_admin import credentials, firestore
+import requests
+from bs4 import BeautifulSoup
+
 
 # 判斷是在 Vercel 還是本地
 if os.path.exists('serviceAccountKey.json'):
@@ -30,9 +33,26 @@ def index():
     homepage += "<a href=/about>憲墉簡介網頁</a><br>"
     homepage += "<a href=/add>次方與根號計算</a><br>"
     homepage += "<br><a href=/read>讀取Firestore資料</a><br>"
+    homepage += "<br><a href=/read2>讀取Firestore資料(根據關鍵字:楊</a><br>"
+    homepage += "<br><a href=/spider>爬蟲</a><br>"
 
     return homepage
 @app.route("/read")
+def read():
+    Result = ""
+    keyword  = "楊"
+    db = firestore.client()
+    collection_ref = db.collection("資管class")    
+    docs = collection_ref.get()    
+    for doc in docs:         
+        teacher = doc.to_dict()
+        keyword
+        if keyword in teacher["name"]:
+                print(teacher)
+        if Result == "":
+            Result = "抱歉查無此人"  
+    return Result
+@app.route("/read2")
 def read():
     Result = ""
     db = firestore.client()
@@ -63,6 +83,18 @@ def account():
         return result
     else:
         return render_template("account.html")
+@app.route("/spider")
+def spider():
+    Result = ""
+    url = "https://www1.pu.edu.tw/~tcyang/course.html"
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+    #print(Data.text)
+    sp = BeautifulSoup(Data.text, "html.parser")
+    result=sp.select(".team-box a")
+    for i in result:
+        result += i.test + i.get("herf") + "<br>"
+        return Result
 
   
 
