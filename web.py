@@ -1,3 +1,9 @@
+import requests
+from bs4 import BeautifulSoup
+
+from flask import Flask, render_template, request
+from datetime import datetime
+
 import os
 import json
 import firebase_admin
@@ -14,3 +20,77 @@ else:
     cred = credentials.Certificate(cred_dict)
 
 firebase_admin.initialize_app(cred)
+
+
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    # 使用原始字串或三引號讓 HTML 更整潔
+    link = "<h1>憲墉Python網頁20260409</h1>"
+    link += "<a href='/mis'>課程</a><hr>"
+    link += "<a href='/today'>現在日期時間</a><hr>"
+    link += "<a href='/welcome?u=子青&d=靜宜資管&c=資訊管理導論'>Get傳值</a><hr>"
+    link += "<a href='/account'>POST傳值</a><hr>"
+    link += "<a href='/read'>讀取Firestore資料(根據姓名關鍵字:楊)</a><hr>"
+    link += "<a href='/read2'>讀取Firestore資料(全部)</a><hr>"
+    link += "<a href='/spider1'>爬取子青老師課程資料</a><hr>"
+    link += "<a href='/movie1'>爬取即將上映電影</a><hr>"
+    return link
+
+@app.route("/mis") # 修正：補上路由註冊
+def course():
+    return "<h1>資訊管理導論</h1><a href=/>返回首頁</a>"
+
+@app.route("/read")
+def read():
+    result_str = "" # 建議變數小寫開頭以符合規範
+    keyword = "楊"
+    db = firestore.client()
+    collection_ref = db.collection("資管class")    
+    docs = collection_ref.get()    
+    
+    for doc in docs:        
+        teacher = doc.to_dict()
+        if keyword in teacher.get("name", ""): # 使用 .get 防止 Key不存在錯誤
+            result_str += f"老師姓名：{teacher['name']} - 資料：{teacher}<br>"
+    
+    if result_str == "":
+        return "抱歉查無此人"  
+    return result_str
+
+@app.route("/read2") # 修正：函式名稱改為 read2
+def read2():
+    result_str = ""
+    db = firestore.client()
+    collection_ref = db.collection("資管class")    
+    docs = collection_ref.get()    
+    for doc in docs:        
+        result_str += "文件內容：{}<br>".format(doc.to_dict())   
+    return result_str
+
+@app.route("/movie1")
+def movie1():
+    r = ""
+    url = "https://www.atmovies.com.tw/movie/next/"
+    try:
+        data = requests.get(url)
+        data.encoding = "utf-8"
+        sp = BeautifulSoup(data.text, "html.parser")
+        result = sp.select(".filmListAllX li")
+        for item in result:
+            img_tag = item.find("img")
+            a_tag = item.find("a")
+            if img_tag and a_tag:
+                r += f"電影名稱：{img_tag.get('alt')}<br>"
+                r += f"介紹連結：https://www.atmovies.com.tw{a_tag.get('href')}<br>"
+                r += f"<img src='{img_tag.get('src')}' width='100'><br><br>" # 這裡直接秀圖會比較酷
+    except Exception as e:
+        return f"爬蟲發生錯誤：{str(e)}"
+    return r
+
+# ... (其餘 today, welcome, account 保持不變) ...
+
+if __name__ == "__main__":
+    app.run(debug=True)
