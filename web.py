@@ -36,7 +36,9 @@ def index():
     link += "<a href='/read'>讀取Firestore資料(根據姓名關鍵字:楊)</a><hr>"
     link += "<a href='/read2'>讀取Firestore資料(全部)</a><hr>"
     link += "<a href='/spider1'>爬取子青老師課程資料</a><hr>"
-    link += "<a href='/movie1'>爬取即將上映電影</a><hr>"
+    link += "<a href='/searchQ'>爬取即將上映電影到資料庫及關鍵字查詢</a><hr>"
+    
+
     return link
 
 @app.route("/mis") # 修正：補上路由註冊
@@ -89,6 +91,43 @@ def movie1():
     except Exception as e:
         return f"爬蟲發生錯誤：{str(e)}"
     return r
+@app.route("/today")
+def today():
+    now = datetime.now()
+    return render_template("today.html", datetime = str(now))
+@app.route("/welcome", methods=["GET"])
+def welcome():
+    user = request.values.get("nick")
+    return render_template("welcome.html", name=user)
+@app.route("/account", methods=["GET", "POST"])
+def account():
+    if request.method == "POST":
+        user = request.form["user"]
+        pwd = request.form["pwd"]
+        result = "您輸入的帳號是：" + user + "; 密碼為：" + pwd 
+        return result
+    else:
+        return render_template("account.html")
+@app.route("/searchQ", methods=["POST","GET"])
+
+def searchQ():
+    if request.method == "POST":
+        MovieTitle = request.form["MovieTitle"]
+        info = ""
+        db = firestore.client()
+        collection_ref = db.collection("電影")
+        docs = collection_ref.order_by("showDate").get()
+        for doc in docs:
+            if MovieTitle in doc.to_dict()["title"]:
+                info += "片名：" + doc.to_dict()["title"] + "<br>"
+                info += "影片介紹：" + doc.to_dict()["hyperlink"] + "<br>"
+                info += "片長：" + doc.to_dict()["showLength"] + " 分鐘<br>"
+                info += "上映日期：" + doc.to_dict()["showDate"] + "<br><br>"
+                return info
+
+    else:
+
+        return render_template("input.html")
 
 # ... (其餘 today, welcome, account 保持不變) ...
 
