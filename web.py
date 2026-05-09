@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 
 from flask import Flask, render_template, request
 from datetime import datetime
+import random
 
 import os
 import json
@@ -27,78 +28,210 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    # 使用原始字串或三引號讓 HTML 更整潔
-    link = "<h1>憲墉Python網頁20260409</h1>"
-    link += "<a href='/mis'>課程</a><hr>"
-    link += "<a href='/today'>現在日期時間</a><hr>"
-    link += "<a href='/welcome?u=子青&d=靜宜資管&c=資訊管理導論'>Get傳值</a><hr>"
-    link += "<a href='/account'>POST傳值</a><hr>"
-    link += "<a href='/read'>讀取Firestore資料(根據姓名關鍵字:楊)</a><hr>"
-    link += "<a href='/read2'>讀取Firestore資料(全部)</a><hr>"
-    link += "<a href='/spider1'>爬取子青老師課程資料</a><hr>"
-    link += "<a href='/searchQ'>爬取即將上映電影到資料庫及關鍵字查詢</a><hr>"
-    
+    return render_template("index.html")
 
-    return link
 
-@app.route("/mis") # 修正：補上路由註冊
-def course():
-    return "<h1>資訊管理導論</h1><a href=/>返回首頁</a>"
+@app.route("/weather", methods=["GET", "POST"])
+def weather_query():
+    result_text = ""
+    if request.method == "POST":
+        city = request.form.get("city", "")
+        if city:
+            city = city.replace("台", "臺")
+            
+            # 氣象署 API
+            url = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=rdec-key-123-45678-011121314&format=JSON&locationName={city}"
+            
+            try:
+                response = requests.get(url, verify=False)
+                data = json.loads(response.text)
+                
+                if data["records"]["location"]:
+                    weather_element = data["records"]["location"][0]["weatherElement"]
+                    weather = weather_element[0]["time"][0]["parameter"]["parameterName"]
+                    rain = weather_element[1]["time"][0]["parameter"]["parameterName"]
+                    
+                    # 這是你要的 R 字串
+                    result_text = f"{city} 目前天氣預報：<br>{weather}，降雨機率：{rain}%"
+                else:
+                    result_text = "找不到該縣市，請輸入正確名稱（如：臺中市）。"
+            except Exception as e:
+                result_text = f"連線錯誤：{e}"
+                
+    return render_template("weather.html", result=result_text)
 
-@app.route("/read")
-def read():
-    result_str = "" # 建議變數小寫開頭以符合規範
-    keyword = "楊"
+
+@app.route("/road")
+def road():
+    R = ""
+    url = "https://newdatacenter.taichung.gov.tw/api/v1/no-auth/resource.download?rid=a1b899c0-511f-4e3d-b22b-814982a97e41"
+    Data = requests.get(url, verify=False)
+    #print(Data.text)
+
+    JsonData = json.loads(Data.text)
+    for item in JsonData:
+        R += item["路口名稱"] + ",總共發生" + item["總件數"] + "件事故<br>"
+    return R
+
+@app.route("/movie3", methods=["GET", "POST"])
+def movie3():
     db = firestore.client()
-    collection_ref = db.collection("資管class")    
-    docs = collection_ref.get()    
+    results = []
+    keyword = ""
     
-    for doc in docs:        
-        teacher = doc.to_dict()
-        if keyword in teacher.get("name", ""): # 使用 .get 防止 Key不存在錯誤
-            result_str += f"老師姓名：{teacher['name']} - 資料：{teacher}<br>"
-    
-    if result_str == "":
-        return "抱歉查無此人"  
-    return result_str
+    if request.method == "POST":
+        keyword = request.form.get("keyword")
+        collection_ref = db.collection("電影2A")
+        docs = collection_ref.get()
 
-@app.route("/read2") # 修正：函式名稱改為 read2
-def read2():
-    result_str = ""
+        for doc in docs:
+            movie = doc.to_dict()
+            if keyword in movie["title"]:
+                results.append({
+                    "title":  movie["title"],
+                    "picture": movie["picture"],
+                    "hyperlink": movie["hyperlink"],
+                    "showDate": movie["showDate"],
+                    "showLength": movie["showLength"],
+                    "lastUpdate": movie["lastUpdate"]
+                })
+
+    return render_template("movie3.html", results=results, keyword=keyword)
+
+
+@app.route("/movie2")
+def movie2():
+  url = "http://www.atmovies.com.tw/movie/next/"
+  Data = requests.get(url)
+  Data.encoding = "utf-8"
+  sp = BeautifulSoup(Data.text, "html.parser")
+  result=sp.select(".filmListAllX li")
+  lastUpdate = sp.find("div", class_="smaller09").text[5:]
+
+  for item in result:
+    picture = item.find("img").get("src").replace(" ", "")
+    title = item.find("div", class_="filmtitle").text
+    movie_id = item.find("div", class_="filmtitle").find("a").get("href").replace("/", "").replace("movie", "")
+    hyperlink = "http://www.atmovies.com.tw" + item.find("div", class_="filmtitle").find("a").get("href")
+    show = item.find("div", class_="runtime").text.replace("上映日期：", "")
+    show = show.replace("片長：", "")
+    show = show.replace("分", "")
+    showDate = show[0:10]
+    showLength = show[13:]
+
+    doc = {
+        "title": title,
+        "picture": picture,
+        "hyperlink": hyperlink,
+        "showDate": showDate,
+        "showLength": showLength,
+        "lastUpdate": lastUpdate
+      }
+
     db = firestore.client()
-    collection_ref = db.collection("資管class")    
-    docs = collection_ref.get()    
-    for doc in docs:        
-        result_str += "文件內容：{}<br>".format(doc.to_dict())   
-    return result_str
+    doc_ref = db.collection("電影2A").document(movie_id)
+    doc_ref.set(doc)    
+  return "近期上映電影已爬蟲及存檔完畢，網站最近更新日期為：" + lastUpdate 
 
 @app.route("/movie1")
 def movie1():
-    r = ""
+    R = ""
     url = "https://www.atmovies.com.tw/movie/next/"
-    try:
-        data = requests.get(url)
-        data.encoding = "utf-8"
-        sp = BeautifulSoup(data.text, "html.parser")
-        result = sp.select(".filmListAllX li")
-        for item in result:
-            img_tag = item.find("img")
-            a_tag = item.find("a")
-            if img_tag and a_tag:
-                r += f"電影名稱：{img_tag.get('alt')}<br>"
-                r += f"介紹連結：https://www.atmovies.com.tw{a_tag.get('href')}<br>"
-                r += f"<img src='{img_tag.get('src')}' width='100'><br><br>" # 這裡直接秀圖會比較酷
-    except Exception as e:
-        return f"爬蟲發生錯誤：{str(e)}"
-    return r
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+    #print(Data.text)
+    sp = BeautifulSoup(Data.text, "html.parser")
+    result=sp.select(".filmListAllX li")
+    for item in result:
+        introduce = "https://www.atmovies.com.tw" + item.find("a").get("href")
+        R +=  "<a href=" + introduce + ">" + item.find("img").get("alt") + "</a><br>"
+        post = "https://www.atmovies.com.tw" + item.find("img").get("src")
+        R += "<img src=" + post + "> </img><br><br>" 
+    return R    
+
+@app.route("/spider1")
+def spider1():
+    R = ""
+    url = "https://www1.pu.edu.tw/~tcyang/course.html"
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+    sp = BeautifulSoup(Data.text, "html.parser")
+    result=sp.select(".team-box a")
+
+    for i in result:
+        R += i.text + i.get("href") + "<br>" 
+    return R
+
+@app.route("/search", methods=["GET", "POST"])
+def search():
+    db = firestore.client()
+    results = []
+    keyword = ""
+    
+    if request.method == "POST":
+        keyword = request.form.get("keyword")
+        collection_ref = db.collection("靜宜資管2026a")
+        docs = collection_ref.get()
+
+        for doc in docs:
+            user = doc.to_dict()
+            if keyword in user["name"]:
+                results.append({
+                    "name": user["name"],
+                    "lab": user["lab"]
+                })
+
+    return render_template("search.html", results=results, keyword=keyword)
+
+
+@app.route("/read2")
+def read2():
+    Result = ""
+    keyword = "楊"
+    db = firestore.client()
+    collection_ref = db.collection("靜宜資管2026B")    
+    docs = collection_ref.get()
+    for doc in docs: 
+        teacher = doc.to_dict()
+        if keyword in teacher["name"]:        
+            Result += str(teacher) + "<br>"
+
+    if Result == "":
+        Result = "抱歉,查無此關鍵字姓名之老師資料"    
+    return Result
+
+@app.route("/read")
+def read():
+    Result = ""
+    db = firestore.client()
+    collection_ref = db.collection("靜宜資管2026B")    
+    docs = collection_ref.get()
+    docs = collection_ref.order_by("lab", direction=firestore.Query.DESCENDING).get()
+    for doc in docs:         
+        Result += str(doc.to_dict()) + "<br>"    
+    return Result
+
+@app.route("/mis")
+def course():
+    return "<h1>資訊管理導論</h1><a href=/>返回首頁</a>"
+
 @app.route("/today")
 def today():
     now = datetime.now()
-    return render_template("today.html", datetime = str(now))
+    return render_template("today.html", datetime=str(now))
+
+@app.route("/about")
+def about():
+    return render_template("mis2a.html")
+
 @app.route("/welcome", methods=["GET"])
 def welcome():
-    user = request.values.get("nick")
-    return render_template("welcome.html", name=user)
+    user = request.values.get("u")
+    d = request.values.get("d")
+    c = request.values.get("c")    
+    return render_template("welcome.html", name= user, dep = d, course = c)
+
+
 @app.route("/account", methods=["GET", "POST"])
 def account():
     if request.method == "POST":
@@ -108,28 +241,87 @@ def account():
         return result
     else:
         return render_template("account.html")
-@app.route("/searchQ", methods=["POST","GET"])
 
-def searchQ():
+
+@app.route("/math", methods=["GET", "POST"])
+def math():
     if request.method == "POST":
-        MovieTitle = request.form["MovieTitle"]
-        info = ""
-        db = firestore.client()
-        collection_ref = db.collection("電影")
-        docs = collection_ref.order_by("showDate").get()
-        for doc in docs:
-            if MovieTitle in doc.to_dict()["title"]:
-                info += "片名：" + doc.to_dict()["title"] + "<br>"
-                info += "影片介紹：" + doc.to_dict()["hyperlink"] + "<br>"
-                info += "片長：" + doc.to_dict()["showLength"] + " 分鐘<br>"
-                info += "上映日期：" + doc.to_dict()["showDate"] + "<br><br>"
-                return info
-
+        x = int(request.form["x"])
+        opt = request.form["opt"]
+        y = int(request.form["y"])      
+        result = "您輸入的是：" + str(x) + opt + str(y)
+        
+        if (opt == "/" and y == 0):
+            result += "，除數不能為0"
+        else:
+            match opt:
+                case "+":
+                    r = x + y
+                case "-":
+                    r = x - y
+                case "*":
+                    r = x * y
+                case "/":
+                    r = x / y  # 修正：之前誤寫為 x - y
+                case _:
+                    return "未知運算符號"
+            result += "=" + str(r)  + "<br><a href=/>返回首頁</a>"          
+        return result
     else:
+        return render_template("math.html")
 
-        return render_template("input.html")
+@app.route('/cup', methods=["GET"])
+def cup():
+    # 檢查網址是否有 ?action=toss
+    #action = request.args.get('action')
+    action = request.values.get("action")
+    result = None
+    
+    if action == 'toss':
+        # 0 代表陽面，1 代表陰面
+        x1 = random.randint(0, 1)
+        x2 = random.randint(0, 1)
+        
+        # 判斷結果文字
+        if x1 != x2:
+            msg = "聖筊：表示神明允許、同意，或行事會順利。"
+        elif x1 == 0:
+            msg = "笑筊：表示神明一笑、不解，或者考慮中，行事狀況不明。"
+        else:
+            msg = "陰筊：表示神明否定、憤怒，或者不宜行事。"
+            
+        result = {
+            "cup1": "/static/" + str(x1) + ".jpg",
+            "cup2": "/static/" + str(x2) + ".jpg",
+            "message": msg
+        }
+        
+    return render_template('cup.html', result=result)
 
-# ... (其餘 today, welcome, account 保持不變) ...
+
+
+@app.route("/math2", methods=["GET", "POST"])
+def math2():
+    result = None
+    if request.method == "POST":
+        # 取得使用者輸入
+        x = int(request.form.get("x"))
+        opt = request.form.get("opt")
+        y = int(request.form.get("y"))
+
+        # 你的核心邏輯
+        match opt:
+            case "∧":
+                result = x ** y
+            case "√":
+                if y != 0:
+                    result = x ** (1/y)
+                else:
+                    result = "數學上不存在「0 次方根」"
+            case _:
+                result = "請輸入∧(次方)或√(根號)"
+    return render_template("math2.html", result=result)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
