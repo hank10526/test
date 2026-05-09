@@ -81,7 +81,7 @@ def movie3():
     
     if request.method == "POST":
         keyword = request.form.get("keyword")
-        collection_ref = db.collection("電影2A")
+        collection_ref = db.collection("靜宜資管")
         docs = collection_ref.get()
 
         for doc in docs:
@@ -170,7 +170,7 @@ def search():
     
     if request.method == "POST":
         keyword = request.form.get("keyword")
-        collection_ref = db.collection("靜宜資管2026a")
+        collection_ref = db.collection("靜宜資管")
         docs = collection_ref.get()
 
         for doc in docs:
@@ -189,7 +189,7 @@ def read2():
     Result = ""
     keyword = "楊"
     db = firestore.client()
-    collection_ref = db.collection("靜宜資管2026B")    
+    collection_ref = db.collection("靜宜資管")    
     docs = collection_ref.get()
     for doc in docs: 
         teacher = doc.to_dict()
@@ -204,7 +204,7 @@ def read2():
 def read():
     Result = ""
     db = firestore.client()
-    collection_ref = db.collection("靜宜資管2026B")    
+    collection_ref = db.collection("靜宜資管")    
     docs = collection_ref.get()
     docs = collection_ref.order_by("lab", direction=firestore.Query.DESCENDING).get()
     for doc in docs:         
