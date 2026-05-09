@@ -220,11 +220,6 @@ def read():
 def course():
     return "<h1>資訊管理導論</h1><a href=/>返回首頁</a>"
 
-@app.route("/today")
-def today():
-    now = datetime.now()
-    return render_template("today.html", datetime=str(now))
-
 @app.route("/about")
 def about():
     return render_template("mis2a.html")
