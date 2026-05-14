@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>天氣查詢系統</title>
+</head>
+<body>
+
+    <h2>縣市天氣查詢</h2>
+
+    <form action="/weather" method="POST">
+        <label for="city">縣市名稱：</label>
+        <input type="text" id="city" name="city" placeholder="例如：臺中市" required>
+        <button type="submit">開始查詢</button>
+    </form>
+
+    {% if result %}
+        <hr>
+        <h3>查詢結果：</h3>
+        <div>
+            {{ result | safe }}
+        </div>
+    {% endif %}
+
+    <br>
+    <a href="/">返回首頁</a>
+
+</body>
+</html>
