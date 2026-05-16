@@ -1,15 +1,20 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "./web.py",
-            "use": "@vercel/python"
+  "version": 2,
+  "builds": [
+    {
+      "src": "web.py",
+      "use": "@vercel/python",
+      "config": {
+        "wsgiOptions": {
+          "app": "app"
         }
-    ],
-    "routes": [
-        {
-            "src": "/(.*)",
-            "dest": "/web.py"
-        }
-    ]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "web.py"
+    }
+  ]
 }
