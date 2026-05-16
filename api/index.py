@@ -29,7 +29,7 @@ def init_firebase():
             print("Warning: No Firebase credentials found.")
 
 init_firebase()
-
+@app.route("/webhook", methods=["POST"])
 def webhook():
     # build a request object
     req = request.get_json(force=True)
