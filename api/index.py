@@ -8,7 +8,7 @@ from flask import Flask, render_template, request, make_response, jsonify
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-app = Flask(__name__, template_folder='../templates', static_folder='../static')
+app = Flask(__name__)
 
 def init_firebase():
     if not firebase_admin._apps:
