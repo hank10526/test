@@ -30,75 +30,19 @@ def init_firebase():
 
 init_firebase()
 
-@app.route("/webhook", methods=["POST"])
 def webhook():
+    # build a request object
     req = request.get_json(force=True)
-    action = req.get("queryResult", {}).get("action", "")
-    
-    # 1. 確保 Firebase 在 Serverless 環境下有正確初始化
-    if not firebase_admin._apps:
-        firebase_config = os.getenv('FIREBASE_CONFIG')
-        if firebase_config:
-            try:
-                cred_dict = json.loads(firebase_config)
-                if "private_key" in cred_dict:
-                    cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred)
-            except Exception as e:
-                return jsonify({"fulfillmentText": f"Firebase 配置錯誤: {str(e)}"})
-        elif os.path.exists('api/serviceAccountKey.json'):
-            cred = credentials.Certificate('api/serviceAccountKey.json')
-            firebase_admin.initialize_app(cred)
-        else:
-            return jsonify({"fulfillmentText": "系統錯誤：找不到 Firebase 憑證金鑰。"})
+    # fetch queryResult from json
+    action =  req["queryResult"]["action"]
+    #msg =  req["queryResult"]["queryText"]
+    #info = "我是楊子青設計的電影聊天機器人, 動作：" + action + "； 查詢內容：" + msg
+    if (action == "rateChoice"):
+        rate =  req["queryResult"]["parameters"]["rate"]
+        info = "我是林憲墉設計的電影聊天機器人, 您選擇的電影分級是：" + rate
 
-    rate = ""
-    info = ""
-    
-    # 2. 檢查 Action 動作名稱
-    if action == "rateChoice":
-        raw_rate = req.get("queryResult", {}).get("parameters", {}).get("rate", "")
-        
-        # 轉換分級代號，確保能對對應到 Firebase 的中文
-        if "普" in raw_rate or raw_rate == "G":
-            rate = "普遍級"
-        elif "保" in raw_rate or raw_rate == "P":
-            rate = "保護級"
-        elif "12" in raw_rate or raw_rate == "F2":
-            rate = "輔12級"
-        elif "15" in raw_rate or raw_rate == "F5":
-            rate = "輔15級"
-        elif "限" in raw_rate or raw_rate == "R":
-            rate = "限制級"
-        else:
-            rate = raw_rate
-            
-        info = "我是林憲墉設計的電影聊天機器人，您選擇的電影分級是：" + rate + "\n\n"
-        
-        # 3. 撈取 Firebase 資料
-        try:
-            db = firestore.client()
-            collection_ref = db.collection("本週新片含分級")
-            docs = collection_ref.get()
-            result = ""
-            for doc in docs:
-                movie_dict = doc.to_dict()
-                if rate and (rate in movie_dict.get("rate", "")):
-                    result += "片名：" + movie_dict.get("title", "") + "\n"
-                    result += "介紹：" + movie_dict.get("hyperlink", "") + "\n\n"
-            
-            if not result:
-                result = "本週暫時沒有這個分級的新片電影上映喔！"
-                
-            info += result
-        except Exception as e:
-            info += f"資料庫連線失敗，原因：{str(e)}"
-            
-    else:
-        info = "收到 Webhook 請求，但 Action 名稱不匹配。"
+    return make_response(jsonify({"fulfillmentText": info}))
 
-    return jsonify({"fulfillmentText": info})
 @app.route("/rate")
 def rate():
     url = "https://www.atmovies.com.tw/movie/new/"
