@@ -4,11 +4,11 @@ import random
 import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
-from flask import Flask, render_template, request ,make_response, jsonify
+from flask import Flask, render_template, request, make_response, jsonify
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
 def init_firebase():
     if not firebase_admin._apps:
@@ -32,40 +32,36 @@ init_firebase()
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # build a request object
     req = request.get_json(force=True)
-    # fetch queryResult from json
-    action =  req["queryResult"]["action"]
-    #msg =  req["queryResult"]["queryText"]
-    #info = "我是楊子青設計的電影聊天機器人, 動作：" + action + "； 查詢內容：" + msg
-    if (action == "rateChoice"):
-        rate =  req["queryResult"]["parameters"]["rate"]
+    action = req["queryResult"]["action"]
+    
+    rate = ""
+    info = ""
+    if action == "rateChoice":
+        rate = req["queryResult"]["parameters"]["rate"]
         info = "我是林憲墉設計的電影聊天機器人, 您選擇的電影分級是：" + rate
+        
     db = firestore.client()
-        collection_ref = db.collection("本週新片含分級")
-        docs = collection_ref.get()
-        result = ""
-        for doc in docs:
-            dict = doc.to_dict()
-            if rate in dict["rate"]:
-                result += "片名：" + dict["title"] + "\n"
-                result += "介紹：" + dict["hyperlink"] + "\n\n"
-        info += result
+    collection_ref = db.collection("本週新片含分級")
+    docs = collection_ref.get()
+    result = ""
+    for doc in docs:
+        movie_dict = doc.to_dict()
+        if rate and (rate in movie_dict.get("rate", "")):
+            result += "片名：" + movie_dict.get("title", "") + "\n"
+            result += "介紹：" + movie_dict.get("hyperlink", "") + "\n\n"
+    info += result
     return make_response(jsonify({"fulfillmentText": info}))
 
 @app.route("/rate")
 def rate():
-    #本週新片
     url = "https://www.atmovies.com.tw/movie/new/"
     Data = requests.get(url)
     Data.encoding = "utf-8"
     sp = BeautifulSoup(Data.text, "html.parser")
     lastUpdate = sp.find(class_="smaller09").text[5:]
-    print(lastUpdate)
-    print()
 
-    result=sp.select(".filmList")
-
+    result = sp.select(".filmList")
     for x in result:
         title = x.find("a").text
         introduce = x.find("p").text
@@ -90,7 +86,6 @@ def rate():
                 rate = "限制級"
 
         t = x.find(class_="runtime").text
-
         t1 = t.find("片長")
         t2 = t.find("分")
         showLength = t[t1+3:t2]
@@ -105,7 +100,7 @@ def rate():
             "picture": picture,
             "hyperlink": hyperlink,
             "showDate": showDate,
-            "showLength": int(showLength),
+            "showLength": int(showLength) if showLength.isdigit() else 0,
             "rate": rate,
             "lastUpdate": lastUpdate
         }
@@ -118,6 +113,7 @@ def rate():
 @app.route("/")
 def index():
     return render_template("index.html")
+
 @app.route("/weather", methods=["GET", "POST"])
 def weather_query():
     result_text = ""
@@ -125,36 +121,26 @@ def weather_query():
         city = request.form.get("city", "")
         if city:
             city = city.replace("台", "臺")
-            
-            # 氣象署 API
             url = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=rdec-key-123-45678-011121314&format=JSON&locationName={city}"
-            
             try:
                 response = requests.get(url, verify=False)
                 data = json.loads(response.text)
-                
                 if data["records"]["location"]:
                     weather_element = data["records"]["location"][0]["weatherElement"]
                     weather = weather_element[0]["time"][0]["parameter"]["parameterName"]
                     rain = weather_element[1]["time"][0]["parameter"]["parameterName"]
-                    
-                    # 這是你要的 R 字串
                     result_text = f"{city} 目前天氣預報：<br>{weather}，降雨機率：{rain}%"
                 else:
                     result_text = "找不到該縣市，請輸入正確名稱（如：臺中市）。"
             except Exception as e:
                 result_text = f"連線錯誤：{e}"
-                
     return render_template("weather.html", result=result_text)
-
 
 @app.route("/road")
 def road():
     R = ""
     url = "https://newdatacenter.taichung.gov.tw/api/v1/no-auth/resource.download?rid=a1b899c0-511f-4e3d-b22b-814982a97e41"
     Data = requests.get(url, verify=False)
-    #print(Data.text)
-
     JsonData = json.loads(Data.text)
     for item in JsonData:
         R += item["路口名稱"] + ",總共發生" + item["總件數"] + "件事故<br>"
@@ -165,60 +151,56 @@ def movie3():
     db = firestore.client()
     results = []
     keyword = ""
-    
     if request.method == "POST":
         keyword = request.form.get("keyword")
         collection_ref = db.collection("電影2A")
         docs = collection_ref.get()
-
         for doc in docs:
             movie = doc.to_dict()
             if keyword in movie["title"]:
                 results.append({
-                    "title":  movie["title"],
+                    "title": movie["title"],
                     "picture": movie["picture"],
                     "hyperlink": movie["hyperlink"],
                     "showDate": movie["showDate"],
                     "showLength": movie["showLength"],
                     "lastUpdate": movie["lastUpdate"]
                 })
-
     return render_template("movie3.html", results=results, keyword=keyword)
-
 
 @app.route("/movie2")
 def movie2():
-  url = "http://www.atmovies.com.tw/movie/next/"
-  Data = requests.get(url)
-  Data.encoding = "utf-8"
-  sp = BeautifulSoup(Data.text, "html.parser")
-  result=sp.select(".filmListAllX li")
-  lastUpdate = sp.find("div", class_="smaller09").text[5:]
+    url = "http://www.atmovies.com.tw/movie/next/"
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+    sp = BeautifulSoup(Data.text, "html.parser")
+    result = sp.select(".filmListAllX li")
+    lastUpdate = sp.find("div", class_="smaller09").text[5:]
 
-  for item in result:
-    picture = item.find("img").get("src").replace(" ", "")
-    title = item.find("div", class_="filmtitle").text
-    movie_id = item.find("div", class_="filmtitle").find("a").get("href").replace("/", "").replace("movie", "")
-    hyperlink = "http://www.atmovies.com.tw" + item.find("div", class_="filmtitle").find("a").get("href")
-    show = item.find("div", class_="runtime").text.replace("上映日期：", "")
-    show = show.replace("片長：", "")
-    show = show.replace("分", "")
-    showDate = show[0:10]
-    showLength = show[13:]
+    for item in result:
+        picture = item.find("img").get("src").replace(" ", "")
+        title = item.find("div", class_="filmtitle").text
+        movie_id = item.find("div", class_="filmtitle").find("a").get("href").replace("/", "").replace("movie", "")
+        hyperlink = "http://www.atmovies.com.tw" + item.find("div", class_="filmtitle").find("a").get("href")
+        show = item.find("div", class_="runtime").text.replace("上映日期：", "")
+        show = show.replace("片長：", "")
+        show = show.replace("分", "")
+        showDate = show[0:10]
+        showLength = show[13:]
 
-    doc = {
-        "title": title,
-        "picture": picture,
-        "hyperlink": hyperlink,
-        "showDate": showDate,
-        "showLength": showLength,
-        "lastUpdate": lastUpdate
-      }
+        doc = {
+            "title": title,
+            "picture": picture,
+            "hyperlink": hyperlink,
+            "showDate": showDate,
+            "showLength": showLength,
+            "lastUpdate": lastUpdate
+        }
 
-    db = firestore.client()
-    doc_ref = db.collection("電影2A").document(movie_id)
-    doc_ref.set(doc)    
-  return "近期上映電影已爬蟲及存檔完畢，網站最近更新日期為：" + lastUpdate 
+        db = firestore.client()
+        doc_ref = db.collection("電影2A").document(movie_id)
+        doc_ref.set(doc)    
+    return "近期上映電影已爬蟲及存檔完畢，網站最近更新日期為：" + lastUpdate 
 
 @app.route("/movie1")
 def movie1():
@@ -226,12 +208,11 @@ def movie1():
     url = "https://www.atmovies.com.tw/movie/next/"
     Data = requests.get(url)
     Data.encoding = "utf-8"
-    #print(Data.text)
     sp = BeautifulSoup(Data.text, "html.parser")
-    result=sp.select(".filmListAllX li")
+    result = sp.select(".filmListAllX li")
     for item in result:
         introduce = "https://www.atmovies.com.tw" + item.find("a").get("href")
-        R +=  "<a href=" + introduce + ">" + item.find("img").get("alt") + "</a><br>"
+        R += "<a href=" + introduce + ">" + item.find("img").get("alt") + "</a><br>"
         post = "https://www.atmovies.com.tw" + item.find("img").get("src")
         R += "<img src=" + post + "> </img><br><br>" 
     return R    
@@ -243,8 +224,7 @@ def spider1():
     Data = requests.get(url)
     Data.encoding = "utf-8"
     sp = BeautifulSoup(Data.text, "html.parser")
-    result=sp.select(".team-box a")
-
+    result = sp.select(".team-box a")
     for i in result:
         R += i.text + i.get("href") + "<br>" 
     return R
@@ -254,12 +234,10 @@ def search():
     db = firestore.client()
     results = []
     keyword = ""
-    
     if request.method == "POST":
         keyword = request.form.get("keyword")
         collection_ref = db.collection("靜宜資管2026a")
         docs = collection_ref.get()
-
         for doc in docs:
             user = doc.to_dict()
             if keyword in user["name"]:
@@ -267,9 +245,7 @@ def search():
                     "name": user["name"],
                     "lab": user["lab"]
                 })
-
     return render_template("search.html", results=results, keyword=keyword)
-
 
 @app.route("/read2")
 def read2():
@@ -282,7 +258,6 @@ def read2():
         teacher = doc.to_dict()
         if keyword in teacher["name"]:        
             Result += str(teacher) + "<br>"
-
     if Result == "":
         Result = "抱歉,查無此關鍵字姓名之老師資料"    
     return Result
@@ -292,7 +267,6 @@ def read():
     Result = ""
     db = firestore.client()
     collection_ref = db.collection("靜宜資管2026B")    
-    docs = collection_ref.get()
     docs = collection_ref.order_by("lab", direction=firestore.Query.DESCENDING).get()
     for doc in docs:         
         Result += str(doc.to_dict()) + "<br>"    
@@ -311,8 +285,7 @@ def welcome():
     user = request.values.get("u")
     d = request.values.get("d")
     c = request.values.get("c")    
-    return render_template("welcome.html", name= user, dep = d, course = c)
-
+    return render_template("welcome.html", name=user, dep=d, course=c)
 
 @app.route("/account", methods=["GET", "POST"])
 def account():
@@ -323,7 +296,6 @@ def account():
         return result
     else:
         return render_template("account.html")
-
 
 @app.route("/math", methods=["GET", "POST"])
 def math():
@@ -344,27 +316,21 @@ def math():
                 case "*":
                     r = x * y
                 case "/":
-                    r = x / y  # 修正：之前誤寫為 x - y
+                    r = x / y
                 case _:
                     return "未知運算符號"
-            result += "=" + str(r)  + "<br><a href=/>返回首頁</a>"          
+            result += "=" + str(r) + "<br><a href=/>返回首頁</a>"          
         return result
     else:
         return render_template("math.html")
 
 @app.route('/cup', methods=["GET"])
 def cup():
-    # 檢查網址是否有 ?action=toss
-    #action = request.args.get('action')
     action = request.values.get("action")
     result = None
-    
     if action == 'toss':
-        # 0 代表陽面，1 代表陰面
         x1 = random.randint(0, 1)
         x2 = random.randint(0, 1)
-        
-        # 判斷結果文字
         if x1 != x2:
             msg = "聖筊：表示神明允許、同意，或行事會順利。"
         elif x1 == 0:
@@ -377,21 +343,15 @@ def cup():
             "cup2": "/static/" + str(x2) + ".jpg",
             "message": msg
         }
-        
     return render_template('cup.html', result=result)
-
-
 
 @app.route("/math2", methods=["GET", "POST"])
 def math2():
     result = None
     if request.method == "POST":
-        # 取得使用者輸入
         x = int(request.form.get("x"))
         opt = request.form.get("opt")
         y = int(request.form.get("y"))
-
-        # 你的核心邏輯
         match opt:
             case "∧":
                 result = x ** y
@@ -406,11 +366,8 @@ def math2():
 
 @app.route("/today")
 def today():
-    # 確保整個檔案中 def today(): 只出現這一次
     now = datetime.now()
     return render_template("today.html", datetime=str(now))
-
-# --- 路由結束 ---
 
 if __name__ == "__main__":
     app.run(debug=True)
