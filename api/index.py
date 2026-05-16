@@ -51,7 +51,7 @@ def webhook():
             result += "片名：" + movie_dict.get("title", "") + "\n"
             result += "介紹：" + movie_dict.get("hyperlink", "") + "\n\n"
     info += result
-    return make_response(jsonify({"fulfillmentText": info}))
+    return jsonify({"fulfillmentText": info})
 
 @app.route("/rate")
 def rate():
