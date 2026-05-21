@@ -1,34 +1,30 @@
+import math
 import os
 import json
-import random
-import requests
-from datetime import datetime
-from bs4 import BeautifulSoup
+
 from flask import Flask, render_template, request, make_response, jsonify
+from datetime import datetime
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+import requests
+from bs4 import BeautifulSoup
+
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# 判斷是在 Vercel 還是本地
+if os.path.exists('serviceAccountKey.json'):
+    cred = credentials.Certificate('serviceAccountKey.json')
+else:
+    firebase_config = os.getenv('FIREBASE_CONFIG')
+    cred_dict = json.loads(firebase_config)
+    cred = credentials.Certificate(cred_dict)
+
+firebase_admin.initialize_app(cred)
+
 app = Flask(__name__)
-
-
-def init_firebase():
-    if not firebase_admin._apps:
-        firebase_config = os.getenv('FIREBASE_CONFIG')
-        if firebase_config:
-            try:
-                cred_dict = json.loads(firebase_config)
-                if "private_key" in cred_dict:
-                    cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred)
-            except Exception as e:
-                print(f"Firebase Config Error: {e}")
-        elif os.path.exists('serviceAccountKey.json'):
-            cred = credentials.Certificate('serviceAccountKey.json')
-            firebase_admin.initialize_app(cred)
-        else:
-            print("Warning: No Firebase credentials found.")
-init_firebase()
 
 
 @app.route("/webhook", methods=["POST"])
