@@ -10,6 +10,7 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
+
 def init_firebase():
     if not firebase_admin._apps:
         firebase_config = os.getenv('FIREBASE_CONFIG')
@@ -27,31 +28,44 @@ def init_firebase():
             firebase_admin.initialize_app(cred)
         else:
             print("Warning: No Firebase credentials found.")
-
 init_firebase()
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     # build a request object
     req = request.get_json(force=True)
     # fetch queryResult from json
     action =  req["queryResult"]["action"]
-    #msg =  req["queryResult"]["queryText"]
-    #info = "我是楊子青設計的電影聊天機器人, 動作：" + action + "； 查詢內容：" + msg
-    if (action == "rateChoice"):
-        rate =  req["queryResult"]["parameters"]["rate"]
-        info = "我是林憲墉設計的電影聊天機器人, 您選擇的電影分級是：" + rate
 
+    if (action == "rateChoice"):
+        rate = req["queryResult"]["parameters"]["rate"]
+        info = "我是林憲墉開發的電影聊天機器人,您選擇的電影分級是：" + rate
+        db = firestore.client()
+        collection_ref = db.collection("本週新片含分級")
+        docs = collection_ref.get()
+        result = ""
+        for doc in docs:
+            dict = doc.to_dict()
+            if rate in dict["rate"]:
+                result += "片名：" + dict["title"] + "\n"
+                result += "介紹：" + dict["hyperlink"] + "\n\n"
+        info += result
     return make_response(jsonify({"fulfillmentText": info}))
 
 @app.route("/rate")
 def rate():
+    #本週新片
     url = "https://www.atmovies.com.tw/movie/new/"
     Data = requests.get(url)
     Data.encoding = "utf-8"
     sp = BeautifulSoup(Data.text, "html.parser")
     lastUpdate = sp.find(class_="smaller09").text[5:]
+    print(lastUpdate)
+    print()
 
-    result = sp.select(".filmList")
+    result=sp.select(".filmList")
+
     for x in result:
         title = x.find("a").text
         introduce = x.find("p").text
@@ -76,6 +90,7 @@ def rate():
                 rate = "限制級"
 
         t = x.find(class_="runtime").text
+
         t1 = t.find("片長")
         t2 = t.find("分")
         showLength = t[t1+3:t2]
@@ -90,7 +105,7 @@ def rate():
             "picture": picture,
             "hyperlink": hyperlink,
             "showDate": showDate,
-            "showLength": int(showLength) if showLength.isdigit() else 0,
+            "showLength": int(showLength),
             "rate": rate,
             "lastUpdate": lastUpdate
         }
@@ -99,7 +114,6 @@ def rate():
         doc_ref = db.collection("本週新片含分級").document(movie_id)
         doc_ref.set(doc)
     return "本週新片已爬蟲及存檔完畢，網站最近更新日期為：" + lastUpdate
-
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -360,7 +374,7 @@ def today():
     return render_template("today.html", datetime=str(now))
 @app.route("/webdemo")
 def webdemo():
-    returm render_templatez("")
+    return render_template("webdemo.html")
 
 
 if __name__ == "__main__":
