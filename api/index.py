@@ -358,6 +358,10 @@ def math2():
 def today():
     now = datetime.now()
     return render_template("today.html", datetime=str(now))
+@app.route("/webdemo")
+def webdemo():
+    returm render_templatez("")
+
 
 if __name__ == "__main__":
     app.run(debug=True)
