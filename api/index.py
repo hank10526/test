@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, make_response, jsonify
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google import genai
+from google.genai import types
 
 
 app = Flask(__name__)
